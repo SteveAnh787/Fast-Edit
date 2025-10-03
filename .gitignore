@@ -1,0 +1,40 @@
+# Rust
+/target
+Cargo.lock
+**/*.rs.bk
+
+# Node/Tauri
+app/node_modules
+app/.turbo
+app/src-tauri/target
+app/src-tauri/Cargo.lock
+app/.vite/
+app/.cache/
+app/npm-debug.log*
+app/yarn-debug.log*
+app/yarn-error.log*
+app/pnpm-debug.log*
+
+# macOS
+*.DS_Store
+.DS_Store
+
+# Build artifacts
+/dist
+/app/dist
+
+# Env files
+.env
+.env.*.local
+app/.env
+app/.env.*.local
+
+# Editors
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Misc
+Thumbs.db
