@@ -80,7 +80,7 @@ class MainWindow(QMainWindow):
         QMainWindow {
             background-color: #0f172a;
             color: #e2e8f0;
-            font-size: 32px;
+            font-size: 14px;
         }
         
         QTabWidget::pane {
@@ -96,14 +96,14 @@ class MainWindow(QMainWindow):
         QTabBar::tab {
             background-color: #334155;
             color: #94a3b8;
-            padding: 16px 32px;
+            padding: 12px 20px;
             margin-right: 2px;
             border-top-left-radius: 8px;
             border-top-right-radius: 8px;
-            font-weight: 600;
-            font-size: 44px;
+            font-weight: 500;
+            font-size: 13px;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
         }
         
         QTabBar::tab:selected {
@@ -121,7 +121,7 @@ class MainWindow(QMainWindow):
             background-color: #1e293b;
             color: #94a3b8;
             border-top: 1px solid #334155;
-            font-size: 40px;
+            font-size: 12px;
         }
         
         QStatusBar::item {
