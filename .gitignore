@@ -23,3 +23,4 @@ coverage.xml
 .DS_Store
 .idea/
 Render Fast Launcher.app/
+.env
