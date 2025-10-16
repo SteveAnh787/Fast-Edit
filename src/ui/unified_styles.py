@@ -75,24 +75,24 @@ class UnifiedStyles:
     _THEMES: Dict[str, ThemePalette] = {
         "light": ThemePalette(
             name="light",
-            surface_dim="#F7F8FA",
+            surface_dim="#FAFAFA",
             surface="#FFFFFF",
-            surface_bright="#FFF7F1",
-            surface_container="#FFF1E9",
-            text_primary="#2F1E16",
-            text_secondary="#6B463B",
-            text_muted="#9E7768",
-            outline="#F3C3B2",
-            outline_variant="#F8D6C6",
+            surface_bright="#FEFEFE",
+            surface_container="#F5F5F5",
+            text_primary="#1A1A1A",
+            text_secondary="#525252",
+            text_muted="#A3A3A3",
+            outline="#E5E5E5",
+            outline_variant="#F5F5F5",
             primary="#F97316",
-            primary_alt="#EF4444",
+            primary_alt="#EA580C",
             accent="#FB923C",
             highlight="#F97316",
             highlight_text="#FFFFFF",
-            success="#22C55E",
-            warning="#F97316",
+            success="#10B981",
+            warning="#F59E0B",
             error="#EF4444",
-            info="#FACC15",
+            info="#3B82F6",
         )
     }
 
@@ -122,7 +122,7 @@ class UnifiedStyles:
                 background-color: $surface_dim;
                 color: $text_primary;
                 font-family: $font_family;
-                font-size: 12px;
+                font-size: 13px;
             }
 
             QLabel { background: transparent; }
@@ -131,62 +131,203 @@ class UnifiedStyles:
             .headline-medium { font-size: 20px; font-weight: 600; color: $text_primary; }
             .headline-small { font-size: 18px; font-weight: 600; color: $text_primary; }
             .title-medium { font-size: 15px; font-weight: 600; color: $text_primary; }
-            .body-medium { font-size: 13px; color: $text_secondary; }
-            .body-small { font-size: 12px; color: $text_muted; }
-            .overline { font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: $text_muted; }
+            .body-medium { font-size: 13px; color: $text_secondary; line-height: 1.5; }
+            .body-small { font-size: 12px; color: $text_muted; line-height: 1.5; }
+            .overline { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: $text_muted; }
 
             QPushButton {
-                border-radius: 10px;
-                font-weight: 600;
-                padding: 10px 22px;
+                border-radius: 8px;
+                font-weight: 500;
+                padding: 10px 20px;
                 border: none;
                 min-height: 40px;
                 background-color: $surface;
                 color: $text_primary;
+                font-size: 13px;
             }
-            QPushButton:disabled { background-color: $surface_bright; color: $text_muted; }
-            QPushButton.btn-primary { background: $gradient_primary; color: $highlight_text; }
-            QPushButton.btn-primary:hover { background: $gradient_soft; }
+            QPushButton:disabled { background-color: $surface_container; color: $text_muted; opacity: 0.5; }
+            QPushButton.btn-primary { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 $primary, stop:1 $primary_alt); color: $highlight_text; font-weight: 600; }
+            QPushButton.btn-primary:hover { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 $primary_alt, stop:1 $primary); }
             QPushButton.btn-primary:pressed { background-color: $primary_alt; }
-            QPushButton.btn-secondary { background-color: $surface_bright; color: $text_primary; }
-            QPushButton.btn-secondary:hover { background-color: $surface_container; }
-            QPushButton.btn-outline { background-color: transparent; border: 1px solid $outline; color: $text_primary; }
-            QPushButton.btn-outline:hover { background-color: $surface_bright; border-color: $primary; }
-            QPushButton.btn-ghost { background-color: transparent; color: $text_secondary; }
-            QPushButton.btn-ghost:hover { background-color: $surface_bright; color: $text_primary; }
-            QPushButton.btn-small { min-height: 32px; padding: 6px 16px; font-size: 11px; }
-            QPushButton.btn-large { min-height: 48px; padding: 14px 32px; font-size: 14px; }
+            QPushButton.btn-secondary { background-color: $surface_container; color: $text_primary; border: 1px solid $outline; font-weight: 500; }
+            QPushButton.btn-secondary:hover { background-color: $surface_bright; border-color: $outline; }
+            QPushButton.btn-outline { background-color: transparent; border: 1.5px solid $outline; color: $text_primary; font-weight: 500; }
+            QPushButton.btn-outline:hover { background-color: $surface_container; border-color: $text_secondary; color: $text_primary; }
+            QPushButton.btn-ghost { background-color: transparent; color: $text_secondary; padding: 8px 12px; font-weight: 500; }
+            QPushButton.btn-ghost:hover { background-color: $surface_container; color: $text_primary; }
+            QPushButton.btn-small { min-height: 32px; padding: 6px 14px; font-size: 12px; border-radius: 6px; }
+            QPushButton.btn-large { min-height: 48px; padding: 14px 28px; font-size: 14px; font-weight: 600; }
 
-            QLineEdit, QTextEdit, QComboBox {
+            QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {
                 background-color: $surface;
-                border: 1px solid $outline_variant;
-                border-radius: 10px;
-                padding: 12px 16px;
+                border: 1.5px solid $outline;
+                border-radius: 8px;
+                padding: 10px 14px;
                 color: $text_primary;
-                font-size: 12px;
+                font-size: 13px;
                 min-height: 40px;
+                selection-background-color: $primary;
+                selection-color: $highlight_text;
             }
-            QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border-color: $primary; background-color: $surface_bright; outline: none; }
-            QLineEdit::placeholder { color: $text_muted; }
+            QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
+                border-color: $primary;
+                border-width: 2px;
+                background-color: $surface;
+                outline: none;
+            }
+            QLineEdit:hover, QTextEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover {
+                border-color: $text_secondary;
+            }
+            QLineEdit::placeholder, QTextEdit::placeholder { color: $text_muted; }
+            QComboBox::drop-down { border: none; width: 24px; }
+            QComboBox::down-arrow { image: none; width: 0; height: 0; }
+            QSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
+                background: transparent;
+                border: none;
+                width: 18px;
+                padding: 2px;
+            }
+            QSpinBox::up-button:hover, QSpinBox::down-button:hover,
+            QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover {
+                background-color: $surface_container;
+            }
 
-            .card { background-color: $surface; border: 1px solid rgba(249, 203, 185, 0.6); border-radius: 18px; padding: 28px; }
-            .card:hover { border-color: $outline; background-color: $surface_bright; }
-            .card-elevated { background-color: $surface; border: 1px solid rgba(249, 203, 185, 0.75); border-radius: 20px; padding: 28px; box-shadow: 0 24px 55px -32px rgba(239, 68, 68, 0.35); }
+            .card {
+                background-color: $surface;
+                border: 1.5px solid $outline;
+                border-radius: 12px;
+                padding: 24px;
+            }
+            .card:hover {
+                border-color: $text_muted;
+                background-color: $surface;
+            }
+            .card-elevated {
+                background-color: $surface;
+                border: 1.5px solid $outline;
+                border-radius: 12px;
+                padding: 24px;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 10px 24px rgba(0, 0, 0, 0.04);
+            }
 
-            QTabWidget::pane { border: none; background-color: transparent; }
-            QTabBar::tab { background-color: transparent; color: $text_muted; padding: 16px 20px; margin-right: 6px; border-bottom: 2px solid transparent; font-size: 14px; font-weight: 600; min-width: 120px; }
-            QTabBar::tab:selected { color: $primary; border-bottom-color: $primary; background-color: $surface; }
-            QTabBar::tab:hover:!selected { color: $text_secondary; background-color: $surface_bright; }
+            QTabWidget::pane { border: none; background-color: transparent; margin-top: 8px; }
+            QTabBar::tab {
+                background-color: transparent;
+                color: $text_muted;
+                padding: 14px 24px;
+                margin-right: 4px;
+                border: none;
+                border-bottom: 3px solid transparent;
+                font-size: 14px;
+                font-weight: 600;
+                min-width: 100px;
+            }
+            QTabBar::tab:selected {
+                color: $primary;
+                border-bottom-color: $primary;
+                background-color: transparent;
+            }
+            QTabBar::tab:hover:!selected {
+                color: $text_secondary;
+                background-color: $surface_container;
+                border-radius: 8px 8px 0 0;
+            }
 
-            QListWidget { background-color: $surface; border: 1px solid $outline_variant; border-radius: 14px; color: $text_primary; font-size: 12px; padding: 10px; }
-            QListWidget::item { padding: 12px 16px; border-radius: 10px; margin: 2px 0; border: none; }
-            QListWidget::item:hover { background-color: $surface_bright; }
-            QListWidget::item:selected { background-color: $primary; color: $highlight_text; }
+            QListWidget {
+                background-color: $surface;
+                border: 1.5px solid $outline;
+                border-radius: 8px;
+                color: $text_primary;
+                font-size: 13px;
+                padding: 6px;
+            }
+            QListWidget::item {
+                padding: 10px 14px;
+                border-radius: 6px;
+                margin: 2px 0;
+                border: none;
+            }
+            QListWidget::item:hover {
+                background-color: $surface_container;
+            }
+            QListWidget::item:selected {
+                background-color: $primary;
+                color: $highlight_text;
+                font-weight: 500;
+            }
 
-            QScrollBar:vertical { background-color: $surface; width: 12px; border-radius: 6px; margin: 0; }
-            QScrollBar::handle:vertical { background-color: $outline_variant; border-radius: 6px; min-height: 20px; margin: 2px; }
-            QScrollBar::handle:vertical:hover { background-color: $outline; }
+            QScrollBar:vertical {
+                background-color: transparent;
+                width: 10px;
+                border-radius: 5px;
+                margin: 2px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: $outline;
+                border-radius: 5px;
+                min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: $text_muted;
+            }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
+            QScrollBar:horizontal {
+                background-color: transparent;
+                height: 10px;
+                border-radius: 5px;
+                margin: 2px;
+            }
+            QScrollBar::handle:horizontal {
+                background-color: $outline;
+                border-radius: 5px;
+                min-width: 30px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background-color: $text_muted;
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }
+
+            QGroupBox {
+                border: 1.5px solid $outline;
+                border-radius: 12px;
+                background-color: $surface;
+                margin-top: 16px;
+                padding-top: 24px;
+                font-weight: 600;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                left: 16px;
+                top: 8px;
+                padding: 0 8px;
+                background-color: $surface;
+                color: $text_primary;
+            }
+
+            QCheckBox {
+                color: $text_secondary;
+                font-size: 12px;
+                spacing: 8px;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border: 1.5px solid $outline;
+                border-radius: 4px;
+                background-color: $surface;
+            }
+            QCheckBox::indicator:hover {
+                border-color: $primary;
+            }
+            QCheckBox::indicator:checked {
+                background-color: $primary;
+                border-color: $primary;
+                image: none;
+            }
+            QCheckBox::indicator:checked:hover {
+                background-color: $primary_alt;
+            }
 
             .text-success { color: $success; }
             .text-warning { color: $warning; }

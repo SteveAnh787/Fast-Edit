@@ -1257,17 +1257,21 @@ class ComposerTab(QWidget):
         group.setStyleSheet(
             f"""
             QGroupBox {{
-                border: 1px solid {palette.outline_variant};
-                border-radius: 16px;
+                border: 1.5px solid {palette.outline};
+                border-radius: 12px;
                 background-color: {palette.surface};
-                padding-top: 20px;
-                margin-top: 12px;
+                padding: 24px;
+                margin-top: 8px;
+                font-weight: 600;
             }}
             QGroupBox::title {{
                 subcontrol-origin: margin;
+                subcontrol-position: top left;
                 left: 16px;
-                top: 10px;
-                padding: 0 4px;
+                top: -8px;
+                padding: 0 8px;
+                background-color: {palette.surface};
+                color: {palette.text_primary};
             }}
         """
         )
@@ -1278,11 +1282,12 @@ class ComposerTab(QWidget):
         palette = UnifiedStyles.palette()
         label.setStyleSheet(
             f"""
-            color: {palette.text_secondary};
+            color: {palette.text_muted};
             text-transform: uppercase;
-            letter-spacing: 2px;
-            font-weight: 600;
-            margin-bottom: 12px;
+            letter-spacing: 0.1em;
+            font-weight: 700;
+            font-size: 11px;
+            margin-bottom: 16px;
         """
         )
         if label not in self._header_labels:
@@ -1290,7 +1295,7 @@ class ComposerTab(QWidget):
 
     def _apply_section_title_style(self, label: QLabel) -> None:
         palette = UnifiedStyles.palette()
-        label.setStyleSheet(f"color: {palette.text_primary}; font-weight: 600;")
+        label.setStyleSheet(f"color: {palette.text_primary}; font-weight: 600; font-size: 15px; line-height: 1.4;")
         if label not in self._section_titles:
             self._section_titles.append(label)
 
@@ -1299,10 +1304,11 @@ class ComposerTab(QWidget):
         label.setStyleSheet(
             f"""
             color: {palette.text_muted};
-            font-size: 10px;
-            font-weight: 600;
+            font-size: 11px;
+            font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.08em;
+            margin-bottom: 6px;
         """
         )
         if label not in self._overline_labels:
@@ -1310,7 +1316,7 @@ class ComposerTab(QWidget):
 
     def _apply_caption_style(self, label: QLabel) -> None:
         palette = UnifiedStyles.palette()
-        label.setStyleSheet(f"color: {palette.text_secondary}; font-size: 10px;")
+        label.setStyleSheet(f"color: {palette.text_secondary}; font-size: 12px; line-height: 1.5;")
         if label not in self._caption_labels:
             self._caption_labels.append(label)
 
@@ -1325,12 +1331,14 @@ class ComposerTab(QWidget):
         panel.setStyleSheet(
             f"""
             QTextEdit {{
-                background-color: {palette.surface};
-                border: 1px solid {palette.outline_variant};
+                background-color: {palette.surface_container};
+                border: 1.5px solid {palette.outline};
                 border-radius: 8px;
-                color: {palette.text_secondary};
-                font-size: 10px;
-                padding: 8px;
+                color: {palette.text_primary};
+                font-size: 12px;
+                padding: 12px;
+                line-height: 1.5;
+                font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
             }}
         """
         )
@@ -1343,22 +1351,26 @@ class ComposerTab(QWidget):
             f"""
             QCheckBox {{
                 color: {palette.text_secondary};
-                font-size: 10px;
-                text-transform: uppercase;
-                font-weight: 600;
-                letter-spacing: 1px;
+                font-size: 13px;
+                font-weight: 500;
+                spacing: 8px;
             }}
             QCheckBox::indicator {{
-                width: 16px;
-                height: 16px;
-                border: 1px solid {palette.outline_variant};
-                border-radius: 3px;
+                width: 18px;
+                height: 18px;
+                border: 1.5px solid {palette.outline};
+                border-radius: 4px;
                 background-color: {palette.surface};
             }}
-            QCheckBox::indicator:checked {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 {palette.primary}, stop:1 {palette.primary_alt});
+            QCheckBox::indicator:hover {{
                 border-color: {palette.primary};
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {palette.primary};
+                border-color: {palette.primary};
+            }}
+            QCheckBox::indicator:checked:hover {{
+                background-color: {palette.primary_alt};
             }}
         """
         )
@@ -1396,10 +1408,10 @@ class ComposerTab(QWidget):
         frame.setStyleSheet(
             f"""
             QFrame {{
-                background-color: {palette.surface};
-                border: 1px solid {palette.outline_variant};
+                background-color: {palette.surface_container};
+                border: 1.5px solid {palette.outline};
                 border-radius: 8px;
-                padding: 12px;
+                padding: 14px;
             }}
         """
         )
