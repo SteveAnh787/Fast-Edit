@@ -2,9 +2,11 @@
 Effects Tab - Video composition với visual effects và transitions
 """
 
+from typing import List
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QGroupBox,
-    QLabel, QLineEdit, QPushButton, QComboBox, QSpinBox, QCheckBox,
+    QLabel, QLineEdit, QPushButton, QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox,
     QTextEdit, QProgressBar, QFileDialog, QMessageBox, QScrollArea,
     QColorDialog, QSlider, QFrame
 )
@@ -12,16 +14,18 @@ from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtGui import QFont, QColor, QPalette
 
 from src.core.video_composer import VideoComposer
+from src.ui.unified_styles import UnifiedStyles
 
 class EffectsTab(QWidget):
     """Tab ghép & render video với visual effects và transitions"""
     
     def __init__(self):
         super().__init__()
+        self.setObjectName("EffectsTabRoot")
         self.video_composer = VideoComposer()
         
         # Subtitle styling state
-        self.font_family = "Arial"
+        self.font_family = "Space Grotesk"
         self.font_size = 48
         self.text_color = "#FFFFFF"
         self.outline_color = "#000000"
@@ -29,7 +33,21 @@ class EffectsTab(QWidget):
         self.letter_spacing = 0.0
         self.preview_text = "Type content to see preview"
         
+        self._group_boxes: List[QGroupBox] = []
+        self._header_labels: List[QLabel] = []
+        self._section_titles: List[QLabel] = []
+        self._overline_labels: List[QLabel] = []
+        self._caption_labels: List[QLabel] = []
+        self._status_labels: List[QLabel] = []
+        self._text_panels: List[QTextEdit] = []
+        self._input_widgets: List[QWidget] = []
+        self._button_configs: List[tuple] = []
+        self._checkboxes: List[QCheckBox] = []
+        self._color_buttons: List[QPushButton] = []
+        self._info_frames: List[QFrame] = []
+
         self.init_ui()
+        self.refresh_theme()
         
     def init_ui(self):
         """Initialize effects tab UI"""
@@ -52,14 +70,8 @@ class EffectsTab(QWidget):
         
         # Header
         header = QLabel("VISUAL EFFECTS & COMPOSITION")
-        header.setFont(QFont("Arial", 11, QFont.Bold))  # Use macOS system font
-        header.setStyleSheet("""
-            color: #94a3b8;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            font-weight: 600;
-            margin-bottom: 12px;
-        """)
+        header.setFont(QFont("Space Grotesk", 11, QFont.Bold))
+        self._apply_header_label_style(header)
         layout.addWidget(header)
         
         # Main content grid - directories and settings
@@ -91,12 +103,12 @@ class EffectsTab(QWidget):
         # Button 1: Individual videos
         self.render_individual_btn = QPushButton("Create Individual Videos")
         self.render_individual_btn.clicked.connect(self.start_individual_render)
-        self.apply_button_style(self.render_individual_btn, "gradient")
+        self.apply_button_style(self.render_individual_btn, "primary", "large")
         
         # Button 2: Complete video
         self.render_complete_btn = QPushButton("Create Complete Video")
         self.render_complete_btn.clicked.connect(self.start_complete_render)
-        self.apply_button_style(self.render_complete_btn, "emerald")
+        self.apply_button_style(self.render_complete_btn, "primary", "large")
         
         render_buttons_layout.addWidget(self.render_individual_btn)
         render_buttons_layout.addWidget(self.render_complete_btn)
@@ -105,21 +117,12 @@ class EffectsTab(QWidget):
         
         # Status and results
         self.render_status = QLabel("")
-        self.render_status.setStyleSheet("color: #10b981; font-size: 12px;")
+        self._apply_status_style(self.render_status)
         layout.addWidget(self.render_status)
         
         self.render_results = QTextEdit()
         self.render_results.setMaximumHeight(200)
-        self.render_results.setStyleSheet("""
-            QTextEdit {
-                background-color: rgba(30, 41, 59, 0.7);
-                border: 1px solid #334155;
-                border-radius: 8px;
-                color: #94a3b8;
-                font-size: 10px;
-                padding: 8px;
-            }
-        """)
+        self._apply_text_panel_style(self.render_results)
         self.render_results.hide()
         layout.addWidget(self.render_results)
         
@@ -141,28 +144,20 @@ class EffectsTab(QWidget):
         
         # Left Panel - Image Effects
         image_effects_group = QGroupBox()
-        image_effects_group.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid #334155;
-                border-radius: 16px;
-                background-color: rgba(30, 41, 59, 0.6);
-                padding-top: 20px;
-                margin-top: 12px;
-            }
-        """)
+        self._apply_group_style(image_effects_group)
         
         image_layout = QVBoxLayout(image_effects_group)
         image_layout.setSpacing(16)
         
         # Header
         image_title = QLabel("Image Animations")
-        image_title.setFont(QFont("Arial", 14, QFont.Bold))
-        image_title.setStyleSheet("color: #e2e8f0; margin-bottom: 8px;")
+        image_title.setFont(QFont("Space Grotesk", 14, QFont.Bold))
+        self._apply_section_title_style(image_title)
         image_layout.addWidget(image_title)
         
         # Animation type
         animation_label = QLabel("ANIMATION TYPE")
-        animation_label.setStyleSheet("color: #94a3b8; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;")
+        self._apply_overline_style(animation_label)
         
         self.animation_type = QComboBox()
         self.animation_type.addItems([
@@ -177,16 +172,7 @@ class EffectsTab(QWidget):
             "Fade In",
             "Fade Out"
         ])
-        self.animation_type.setStyleSheet("""
-            QComboBox {
-                background-color: #1e293b;
-                border: 1px solid #475569;
-                border-radius: 8px;
-                padding: 8px 12px;
-                color: #e2e8f0;
-                font-size: 12px;
-            }
-        """)
+        self.apply_input_style(self.animation_type)
         
         image_layout.addWidget(animation_label)
         image_layout.addWidget(self.animation_type)
@@ -197,37 +183,19 @@ class EffectsTab(QWidget):
         
         # Duration per image
         duration_label = QLabel("DURATION (SEC)")
-        duration_label.setStyleSheet("color: #94a3b8; font-size: 10px; font-weight: 600; text-transform: uppercase;")
+        self._apply_overline_style(duration_label)
         self.image_duration = QSpinBox()
         self.image_duration.setRange(1, 30)
         self.image_duration.setValue(5)
-        self.image_duration.setStyleSheet("""
-            QSpinBox {
-                background-color: #1e293b;
-                border: 1px solid #475569;
-                border-radius: 8px;
-                padding: 8px 12px;
-                color: #e2e8f0;
-                font-size: 12px;
-            }
-        """)
+        self.apply_input_style(self.image_duration)
         
         # Animation intensity
         intensity_label = QLabel("INTENSITY")
-        intensity_label.setStyleSheet("color: #94a3b8; font-size: 10px; font-weight: 600; text-transform: uppercase;")
+        self._apply_overline_style(intensity_label)
         self.animation_intensity = QComboBox()
         self.animation_intensity.addItems(["Subtle", "Medium", "Strong"])
         self.animation_intensity.setCurrentIndex(1)  # Medium default
-        self.animation_intensity.setStyleSheet("""
-            QComboBox {
-                background-color: #1e293b;
-                border: 1px solid #475569;
-                border-radius: 8px;
-                padding: 8px 12px;
-                color: #e2e8f0;
-                font-size: 12px;
-            }
-        """)
+        self.apply_input_style(self.animation_intensity)
         
         settings_grid.addWidget(duration_label, 0, 0)
         settings_grid.addWidget(self.image_duration, 1, 0)
@@ -238,28 +206,20 @@ class EffectsTab(QWidget):
         
         # Right Panel - Transition Effects
         transition_effects_group = QGroupBox()
-        transition_effects_group.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid #334155;
-                border-radius: 16px;
-                background-color: rgba(30, 41, 59, 0.6);
-                padding-top: 20px;
-                margin-top: 12px;
-            }
-        """)
+        self._apply_group_style(transition_effects_group)
         
         transition_layout = QVBoxLayout(transition_effects_group)
         transition_layout.setSpacing(16)
         
         # Header
         transition_title = QLabel("Transition Effects")
-        transition_title.setFont(QFont("Arial", 14, QFont.Bold))
-        transition_title.setStyleSheet("color: #e2e8f0; margin-bottom: 8px;")
+        transition_title.setFont(QFont("Space Grotesk", 14, QFont.Bold))
+        self._apply_section_title_style(transition_title)
         transition_layout.addWidget(transition_title)
         
         # Transition type
         trans_type_label = QLabel("TRANSITION TYPE")
-        trans_type_label.setStyleSheet("color: #94a3b8; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;")
+        self._apply_overline_style(trans_type_label)
         
         self.transition_type = QComboBox()
         self.transition_type.addItems([
@@ -275,16 +235,7 @@ class EffectsTab(QWidget):
             "Slide Right",
             "Blur Transition"
         ])
-        self.transition_type.setStyleSheet("""
-            QComboBox {
-                background-color: #1e293b;
-                border: 1px solid #475569;
-                border-radius: 8px;
-                padding: 8px 12px;
-                color: #e2e8f0;
-                font-size: 12px;
-            }
-        """)
+        self.apply_input_style(self.transition_type)
         
         transition_layout.addWidget(trans_type_label)
         transition_layout.addWidget(self.transition_type)
@@ -295,44 +246,16 @@ class EffectsTab(QWidget):
         
         # Transition duration
         trans_duration_label = QLabel("DURATION (SEC)")
-        trans_duration_label.setStyleSheet("color: #94a3b8; font-size: 10px; font-weight: 600; text-transform: uppercase;")
+        self._apply_overline_style(trans_duration_label)
         self.transition_duration = QSpinBox()
         self.transition_duration.setRange(1, 10)
         self.transition_duration.setValue(2)
-        self.transition_duration.setStyleSheet("""
-            QSpinBox {
-                background-color: #1e293b;
-                border: 1px solid #475569;
-                border-radius: 8px;
-                padding: 8px 12px;
-                color: #e2e8f0;
-                font-size: 12px;
-            }
-        """)
-        
+        self.apply_input_style(self.transition_duration)
+
         # Apply to all checkbox
         self.apply_to_all = QCheckBox("Apply to All Images")
         self.apply_to_all.setChecked(True)
-        self.apply_to_all.setStyleSheet("""
-            QCheckBox {
-                color: #94a3b8;
-                font-size: 10px;
-                text-transform: uppercase;
-                font-weight: 600;
-                letter-spacing: 1px;
-            }
-            QCheckBox::indicator {
-                width: 16px;
-                height: 16px;
-                border: 1px solid #475569;
-                border-radius: 3px;
-                background-color: #1e293b;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #10b981;
-                border-color: #059669;
-            }
-        """)
+        self._apply_checkbox_style(self.apply_to_all)
         
         trans_settings_grid.addWidget(trans_duration_label, 0, 0)
         trans_settings_grid.addWidget(self.transition_duration, 1, 0)
@@ -343,7 +266,7 @@ class EffectsTab(QWidget):
         # Preview button
         preview_btn = QPushButton("Preview Effects")
         preview_btn.clicked.connect(self.preview_effects)
-        self.apply_button_style(preview_btn, "indigo")
+        self.apply_button_style(preview_btn, "secondary")
         transition_layout.addWidget(preview_btn)
         
         # Add to main layout
@@ -355,40 +278,32 @@ class EffectsTab(QWidget):
     def create_input_directories_widget(self):
         """Create input directories widget"""
         group = QGroupBox()
-        group.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid #334155;
-                border-radius: 16px;
-                background-color: rgba(30, 41, 59, 0.6);
-                padding-top: 20px;
-                margin-top: 12px;
-            }
-        """)
+        self._apply_group_style(group)
         
         layout = QVBoxLayout(group)
         layout.setSpacing(16)
-        
+
         # Audio directory
         audio_layout = self.create_directory_input("AUDIO DIRECTORY", "Path to audio folder")
         self.audio_directory = audio_layout[1]
         audio_browse_btn = audio_layout[2]
         audio_browse_btn.clicked.connect(self.browse_audio_directory)
         layout.addLayout(audio_layout[0])
-        
+
         # Image directory  
         image_layout = self.create_directory_input("IMAGE DIRECTORY", "Path to image folder")
         self.image_directory = image_layout[1]
         image_browse_btn = image_layout[2]
         image_browse_btn.clicked.connect(self.browse_image_directory)
         layout.addLayout(image_layout[0])
-        
+
         # Subtitle directory (optional)
         subtitle_layout = self.create_directory_input("SUBTITLE DIRECTORY (OPTIONAL)", "Path to subtitle .srt folder")
         self.subtitle_directory = subtitle_layout[1]
         subtitle_browse_btn = subtitle_layout[2]
         subtitle_browse_btn.clicked.connect(self.browse_subtitle_directory)
         layout.addLayout(subtitle_layout[0])
-        
+
         # Output directory
         output_layout = self.create_directory_input("OUTPUT DIRECTORY", "Path to save videos (.mp4)")
         self.output_directory = output_layout[1]
@@ -401,22 +316,14 @@ class EffectsTab(QWidget):
     def create_output_settings_widget(self):
         """Create output settings widget"""
         group = QGroupBox()
-        group.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid #334155;
-                border-radius: 16px;
-                background-color: rgba(30, 41, 59, 0.6);
-                padding-top: 20px;
-                margin-top: 12px;
-            }
-        """)
+        self._apply_group_style(group)
         
         layout = QVBoxLayout(group)
         layout.setSpacing(16)
         
         # Frame rate
         frame_rate_label = QLabel("FRAME RATE")
-        frame_rate_label.setStyleSheet("color: #94a3b8; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;")
+        self._apply_overline_style(frame_rate_label)
         self.frame_rate = QLineEdit()
         self.frame_rate.setPlaceholderText("30")
         self.frame_rate.setText("30")
@@ -427,29 +334,20 @@ class EffectsTab(QWidget):
         
         # Video codec
         codec_label = QLabel("VIDEO CODEC")
-        codec_label.setStyleSheet("color: #94a3b8; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;")
+        self._apply_overline_style(codec_label)
         self.video_codec = QComboBox()
         self.video_codec.addItems([
             "H.264 (VideoToolbox)",
             "HEVC H.265 (VideoToolbox)"
         ])
-        self.video_codec.setStyleSheet("""
-            QComboBox {
-                background-color: #1e293b;
-                border: 1px solid #475569;
-                border-radius: 8px;
-                padding: 8px 12px;
-                color: #e2e8f0;
-                font-size: 12px;
-            }
-        """)
+        self.apply_input_style(self.video_codec)
         
         layout.addWidget(codec_label)
         layout.addWidget(self.video_codec)
         
         # Audio bitrate
         bitrate_label = QLabel("AUDIO BITRATE")
-        bitrate_label.setStyleSheet("color: #94a3b8; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;")
+        self._apply_overline_style(bitrate_label)
         self.audio_bitrate = QLineEdit()
         self.audio_bitrate.setPlaceholderText("192k")
         self.audio_bitrate.setText("192k")
@@ -515,7 +413,7 @@ class EffectsTab(QWidget):
         
         # Header
         controls_title = QLabel("Subtitle Styling (Burn-in)")
-        controls_title.setFont(QFont("Arial", 14, QFont.Bold))
+        controls_title.setFont(QFont("Space Grotesk", 14, QFont.Bold))
         controls_title.setStyleSheet("color: #e2e8f0; margin-bottom: 8px;")
         controls_layout.addWidget(controls_title)
         
@@ -527,7 +425,17 @@ class EffectsTab(QWidget):
         font_label = QLabel("FONT")
         font_label.setStyleSheet("color: #94a3b8; font-size: 10px; font-weight: 600; text-transform: uppercase;")
         self.font_combo = QComboBox()
-        self.font_combo.addItems(["Arial", "Helvetica", "Montserrat", "Roboto", "Open Sans", "Arial Black"])
+        self.font_combo.addItems(
+            [
+                "Space Grotesk",
+                "Montserrat",
+                "Roboto",
+                "Open Sans",
+                "Arial",
+                "Helvetica",
+                "Arial Black",
+            ]
+        )
         self.font_combo.currentTextChanged.connect(self.update_font_family)
         self.font_combo.setStyleSheet("""
             QComboBox {
@@ -582,7 +490,7 @@ class EffectsTab(QWidget):
         
         # Preview header
         preview_title = QLabel("Preview")
-        preview_title.setFont(QFont("Arial", 14, QFont.Bold))
+        preview_title.setFont(QFont("Space Grotesk", 14, QFont.Bold))
         preview_title.setStyleSheet("color: #e2e8f0; margin-bottom: 8px;")
         preview_layout.addWidget(preview_title)
         
@@ -620,14 +528,14 @@ class EffectsTab(QWidget):
         layout.setSpacing(8)
         
         label = QLabel(label_text)
-        label.setStyleSheet("color: #94a3b8; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;")
+        self._apply_overline_style(label)
         
         input_layout = QHBoxLayout()
         line_edit = QLineEdit()
         line_edit.setPlaceholderText(placeholder)
         
         browse_btn = QPushButton("Browse")
-        self.apply_button_style(browse_btn, "indigo")
+        self.apply_button_style(browse_btn, "outline", "small")
         
         self.apply_input_style(line_edit)
         
@@ -641,103 +549,246 @@ class EffectsTab(QWidget):
         
     def apply_input_style(self, widget):
         """Apply consistent input styling"""
-        widget.setStyleSheet("""
-            QLineEdit {
-                background-color: #1e293b;
-                border: 1px solid #475569;
+        palette = UnifiedStyles.palette()
+        widget.setStyleSheet(
+            f"""
+            QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
+                background-color: {palette.surface};
+                border: 1px solid {palette.outline_variant};
                 border-radius: 8px;
                 padding: 8px 12px;
-                color: #e2e8f0;
+                color: {palette.text_primary};
                 font-size: 12px;
-            }
-            QLineEdit:focus {
-                border-color: #4f46e5;
+            }}
+            QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
+                border-color: {palette.primary};
+                background-color: {palette.surface_bright};
                 outline: none;
-            }
-        """)
-        
-    def apply_button_style(self, button, color_scheme="indigo"):
-        """Apply button styling"""
-        if color_scheme == "indigo":
-            style = """
-                QPushButton {
-                    background-color: rgba(79, 70, 229, 0.2);
-                    border: 1px solid rgba(79, 70, 229, 0.6);
-                    border-radius: 8px;
-                    color: #a5b4fc;
-                    padding: 8px 12px;
-                    font-size: 10px;
-                    font-weight: 600;
-                    text-transform: uppercase;
-                    letter-spacing: 1px;
-                    min-height: 32px;
-                }
-                QPushButton:hover {
-                    background-color: rgba(79, 70, 229, 0.3);
-                    border-color: #6366f1;
-                }
-                QPushButton:pressed {
-                    background-color: rgba(79, 70, 229, 0.4);
-                }
-            """
-        elif color_scheme == "emerald":
-            style = """
-                QPushButton {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                        stop:0 #10b981, stop:1 #059669);
-                    border: none;
-                    border-radius: 10px;
-                    color: white;
-                    padding: 14px 28px;
-                    font-size: 13px;
-                    font-weight: 700;
-                    min-height: 44px;
-                    text-transform: uppercase;
-                    letter-spacing: 1px;
-                }
-                QPushButton:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                        stop:0 #059669, stop:1 #047857);
-                }
-                QPushButton:pressed {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                        stop:0 #047857, stop:1 #065f46);
-                }
-                QPushButton:disabled {
-                    background: #6b7280;
-                    color: #9ca3af;
-                }
-            """
-        else:  # gradient
-            style = """
-                QPushButton {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                        stop:0 #4f46e5, stop:1 #06b6d4);
-                    border: none;
-                    border-radius: 10px;
-                    color: white;
-                    padding: 14px 28px;
-                    font-size: 13px;
-                    font-weight: 700;
-                    min-height: 44px;
-                    text-transform: uppercase;
-                    letter-spacing: 1px;
-                }
-                QPushButton:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                        stop:0 #4338ca, stop:1 #0891b2);
-                }
-                QPushButton:pressed {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                        stop:0 #3730a3, stop:1 #0e7490);
-                }
-                QPushButton:disabled {
-                    background: #6b7280;
-                    color: #9ca3af;
-                }
-            """
-        
-        button.setStyleSheet(style)
+            }}
+            QComboBox::drop-down {{ border: none; }}
+            QComboBox::down-arrow {{ width: 0px; height: 0px; }}
+            QSpinBox::up-button,
+            QSpinBox::down-button,
+            QDoubleSpinBox::up-button,
+            QDoubleSpinBox::down-button {{
+                background: transparent;
+                border: none;
+                width: 14px;
+            }}
+        """
+        )
+
+        if widget not in self._input_widgets:
+            self._input_widgets.append(widget)
+
+    def apply_button_style(self, button, color_scheme="primary", size="medium"):
+        scheme_map = {
+            "indigo": "secondary",
+            "emerald": "primary",
+            "gradient": "primary",
+            "outline": "outline",
+        }
+        UnifiedStyles.apply_button_style(button, scheme_map.get(color_scheme, color_scheme), size)
+        if all(button is not btn for btn, _, __ in self._button_configs):
+            self._button_configs.append((button, color_scheme, size))
+
+    def _apply_group_style(self, group: QGroupBox) -> None:
+        palette = UnifiedStyles.palette()
+        group.setStyleSheet(
+            f"""
+            QGroupBox {{
+                border: 1px solid {palette.outline_variant};
+                border-radius: 16px;
+                background-color: {palette.surface};
+                padding-top: 20px;
+                margin-top: 12px;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                left: 16px;
+                top: 10px;
+                padding: 0 4px;
+            }}
+        """
+        )
+        if group not in self._group_boxes:
+            self._group_boxes.append(group)
+
+    def _apply_header_label_style(self, label: QLabel) -> None:
+        palette = UnifiedStyles.palette()
+        label.setStyleSheet(
+            f"""
+            color: {palette.text_secondary};
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        """
+        )
+        if label not in self._header_labels:
+            self._header_labels.append(label)
+
+    def _apply_section_title_style(self, label: QLabel) -> None:
+        palette = UnifiedStyles.palette()
+        label.setStyleSheet(f"color: {palette.text_primary}; font-weight: 600;")
+        if label not in self._section_titles:
+            self._section_titles.append(label)
+
+    def _apply_overline_style(self, label: QLabel) -> None:
+        palette = UnifiedStyles.palette()
+        label.setStyleSheet(
+            f"""
+            color: {palette.text_muted};
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        """
+        )
+        if label not in self._overline_labels:
+            self._overline_labels.append(label)
+
+    def _apply_caption_style(self, label: QLabel) -> None:
+        palette = UnifiedStyles.palette()
+        label.setStyleSheet(f"color: {palette.text_secondary}; font-size: 10px;")
+        if label not in self._caption_labels:
+            self._caption_labels.append(label)
+
+    def _apply_status_style(self, label: QLabel) -> None:
+        palette = UnifiedStyles.palette()
+        label.setStyleSheet(f"color: {palette.primary_alt}; font-size: 12px;")
+        if label not in self._status_labels:
+            self._status_labels.append(label)
+
+    def _apply_text_panel_style(self, panel: QTextEdit) -> None:
+        palette = UnifiedStyles.palette()
+        panel.setStyleSheet(
+            f"""
+            QTextEdit {{
+                background-color: {palette.surface};
+                border: 1px solid {palette.outline_variant};
+                border-radius: 8px;
+                color: {palette.text_secondary};
+                font-size: 10px;
+                padding: 8px;
+            }}
+        """
+        )
+        if panel not in self._text_panels:
+            self._text_panels.append(panel)
+
+    def _apply_checkbox_style(self, checkbox: QCheckBox) -> None:
+        palette = UnifiedStyles.palette()
+        checkbox.setStyleSheet(
+            f"""
+            QCheckBox {{
+                color: {palette.text_secondary};
+                font-size: 10px;
+                text-transform: uppercase;
+                font-weight: 600;
+                letter-spacing: 1px;
+            }}
+            QCheckBox::indicator {{
+                width: 16px;
+                height: 16px;
+                border: 1px solid {palette.outline_variant};
+                border-radius: 3px;
+                background-color: {palette.surface};
+            }}
+            QCheckBox::indicator:checked {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 {palette.primary}, stop:1 {palette.primary_alt});
+                border-color: {palette.primary};
+            }}
+        """
+        )
+        if checkbox not in self._checkboxes:
+            self._checkboxes.append(checkbox)
+
+    def _apply_color_button_style(self, button: QPushButton, color: str) -> None:
+        palette = UnifiedStyles.palette()
+        button.setStyleSheet(
+            f"""
+            QPushButton {{
+                background-color: {color};
+                border: 1px solid {palette.outline_variant};
+                border-radius: 6px;
+            }}
+        """
+        )
+        if button not in self._color_buttons:
+            self._color_buttons.append(button)
+
+    def _apply_preview_frame_style(self) -> None:
+        palette = UnifiedStyles.palette()
+        self.preview_frame.setStyleSheet(
+            f"""
+            QFrame {{
+                background-color: {palette.surface_dim};
+                border: 1px solid {palette.outline_variant};
+                border-radius: 12px;
+            }}
+        """
+        )
+
+    def _apply_info_frame_style(self, frame: QFrame) -> None:
+        palette = UnifiedStyles.palette()
+        frame.setStyleSheet(
+            f"""
+            QFrame {{
+                background-color: {palette.surface};
+                border: 1px solid {palette.outline_variant};
+                border-radius: 8px;
+                padding: 12px;
+            }}
+        """
+        )
+        if frame not in self._info_frames:
+            self._info_frames.append(frame)
+
+    def refresh_theme(self) -> None:
+        """Reapply palette-driven styles when theme changes."""
+        UnifiedStyles.refresh_stylesheet(self)
+        for group in self._group_boxes:
+            self._apply_group_style(group)
+
+        for label in self._header_labels:
+            self._apply_header_label_style(label)
+
+        for label in self._section_titles:
+            self._apply_section_title_style(label)
+
+        for label in self._overline_labels:
+            self._apply_overline_style(label)
+
+        for label in self._caption_labels:
+            self._apply_caption_style(label)
+
+        for label in self._status_labels:
+            self._apply_status_style(label)
+
+        for panel in self._text_panels:
+            self._apply_text_panel_style(panel)
+
+        for checkbox in self._checkboxes:
+            self._apply_checkbox_style(checkbox)
+
+        for frame in self._info_frames:
+            self._apply_info_frame_style(frame)
+
+        if hasattr(self, "preview_frame"):
+            self._apply_preview_frame_style()
+        if hasattr(self, "text_color_btn"):
+            self._apply_color_button_style(self.text_color_btn, self.text_color)
+        if hasattr(self, "outline_color_btn"):
+            self._apply_color_button_style(self.outline_color_btn, self.outline_color)
+
+        for widget in self._input_widgets:
+            self.apply_input_style(widget)
+
+        for button, scheme, size in self._button_configs:
+            self.apply_button_style(button, scheme, size)
+
     
     # Subtitle styling methods
     def update_font_family(self, font):

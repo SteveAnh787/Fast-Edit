@@ -1,12 +1,13 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
+import uuid
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 
-from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -24,869 +25,668 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .unified_styles import ModernColors, MaterialIcons, UnifiedStyles
+from .unified_styles import UnifiedStyles
+
+
+@dataclass
+class ProjectRecord:
+    id: str
+    name: str
+    description: str
+    created_at: str
+    updated_at: str
+    directories: Dict[str, str] = field(default_factory=lambda: {"audio": "", "image": "", "subtitle": "", "output": ""})
+    resources: Dict[str, int] = field(default_factory=lambda: {"audio": 0, "image": 0, "subtitle": 0})
+    history: List[Dict[str, str]] = field(default_factory=list)
+    settings: Dict[str, Any] = field(default_factory=dict)
+    file_path: Optional[Path] = None
+
+    @classmethod
+    def new(cls) -> "ProjectRecord":
+        now = datetime.now().isoformat()
+        record = cls(
+            id=str(uuid.uuid4()),
+            name="Untitled Project",
+            description="",
+            created_at=now,
+            updated_at=now,
+        )
+        record.push_history("Project created")
+        return record
+
+    def push_history(self, message: str) -> None:
+        self.history.insert(0, {"timestamp": datetime.now().isoformat(), "event": message})
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "directories": self.directories,
+            "resources": self.resources,
+            "history": self.history,
+            "settings": self.settings,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any], source: Optional[Path] = None) -> "ProjectRecord":
+        # Backward compatibility for legacy project files.
+        directories = data.get("directories") or {
+            "audio": data.get("audio_directory", ""),
+            "image": data.get("image_directory", ""),
+            "subtitle": data.get("subtitle_directory", ""),
+            "output": data.get("output_directory", ""),
+        }
+        resources = data.get("resources") or {"audio": 0, "image": 0, "subtitle": 0}
+        history = data.get("history") or []
+
+        record = cls(
+            id=data.get("id", data.get("name", str(uuid.uuid4()))),
+            name=data.get("name", "Untitled Project"),
+            description=data.get("description", ""),
+            created_at=data.get("created_at", datetime.now().isoformat()),
+            updated_at=data.get("updated_at", datetime.now().isoformat()),
+            directories=directories,
+            resources=resources,
+            history=history,
+            settings=data.get("settings", {}),
+            file_path=source,
+        )
+        return record
 
 
 class ProjectTab(QWidget):
-    """Project management tab with responsive layout and unified styling."""
+    """Project management workspace inspired by shadcn/ui."""
 
     def __init__(self) -> None:
         super().__init__()
-        self._init_scaling()
-
-        self.current_project: Dict[str, object] = {
-            "name": "",
-            "created": "",
-            "modified": "",
-            "audio_directory": "",
-            "image_directory": "",
-            "subtitle_directory": "",
-            "output_directory": "",
-            "pattern": "",
-            "assets": [],
-            "settings": {},
-        }
-
         self.projects_directory = self._get_projects_directory()
+        self.projects: List[ProjectRecord] = []
+        self.current_project: ProjectRecord = ProjectRecord.new()
+        self.unsaved_changes = False
 
-        self._build_widgets()
-        self.load_recent_projects()
-        self.update_project_info()
-        self.refresh_stylesheet()
-
-    # ------------------------------------------------------------------
-    # Styling helpers
-    # ------------------------------------------------------------------
-    def _init_scaling(self) -> None:
-        """Initialise scaling factors based on the current screen DPI."""
-        screen = self.screen() or QGuiApplication.primaryScreen()
-        dpi = 96.0
-        if screen is not None:
-            try:
-                dpi = screen.logicalDotsPerInch() or dpi
-            except AttributeError:
-                pass
-        self.dpi_scale = max(0.85, min(1.45, dpi / 96.0))
-        self.responsive_breakpoint = 1080
-
-    def sp(self, value: int) -> int:
-        """Scale pixel-based spacing values."""
-        return max(1, int(round(value * self.dpi_scale)))
-
-    def fp(self, value: int) -> int:
-        """Scale font sizes with sensible floor."""
-        return max(10, int(round(value * self.dpi_scale)))
-
-    def refresh_stylesheet(self) -> None:
-        base_styles = UnifiedStyles.get_main_stylesheet()
-        self.setStyleSheet(base_styles + self._build_local_stylesheet())
-
-    def _build_local_stylesheet(self) -> str:
-        return f"""
-        QFrame#HeaderFrame {{
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 {ModernColors.PRIMARY}, stop:1 {ModernColors.TERTIARY});
-            border-bottom: 1px solid {ModernColors.OUTLINE_VARIANT};
-        }}
-
-        QLabel#HeaderTitle {{
-            color: {ModernColors.ON_PRIMARY};
-            font-size: {self.fp(18)}px;
-            font-weight: 600;
-            background: transparent;
-        }}
-
-        QLabel#HeaderSubtitle {{
-            color: {ModernColors.ON_PRIMARY};
-            font-size: {self.fp(12)}px;
-            opacity: 0.8;
-            background: transparent;
-        }}
-
-        QLabel#HeaderInfo {{
-            color: {ModernColors.ON_PRIMARY};
-            background-color: rgba(15, 23, 42, 0.45);
-            padding: {self.sp(6)}px {self.sp(12)}px;
-            border-radius: {self.sp(12)}px;
-            font-size: {self.fp(11)}px;
-        }}
-
-        QFrame#InfoFrame {{
-            background-color: rgba(15, 23, 42, 0.55);
-            border: 1px solid {ModernColors.OUTLINE_VARIANT};
-            border-radius: {self.sp(12)}px;
-        }}
-
-        QLabel#StatusLabel {{
-            color: {ModernColors.SECONDARY};
-            font-weight: 600;
-            font-size: {self.fp(12)}px;
-        }}
-
-        QLabel#DetailsLabel {{
-            color: {ModernColors.ON_SURFACE_VARIANT};
-            font-size: {self.fp(11)}px;
-        }}
-
-        QListWidget#RecentProjectsList {{
-            min-height: {self.sp(220)}px;
-        }}
-
-        QTextEdit#AssetsPreview {{
-            min-height: {self.sp(140)}px;
-        }}
-
-        QFrame#ActionsBar {{
-            background-color: rgba(15, 23, 42, 0.55);
-            border: 1px solid {ModernColors.OUTLINE_VARIANT};
-            border-radius: {self.sp(16)}px;
-        }}
-        """
+        self._build_ui()
+        self._load_projects()
+        self._bind_project(self.current_project)
 
     # ------------------------------------------------------------------
-    # UI construction
+    # UI Construction
     # ------------------------------------------------------------------
-    def _build_widgets(self) -> None:
-        main_layout = QVBoxLayout(self)
-        main_layout.setSpacing(self.sp(16))
-        main_layout.setContentsMargins(self.sp(24), self.sp(20), self.sp(24), self.sp(24))
+    def _build_ui(self) -> None:
+        UnifiedStyles.refresh_stylesheet(self)
 
-        header = self._create_header_section()
-        main_layout.addWidget(header)
+        root_layout = QHBoxLayout(self)
+        root_layout.setContentsMargins(24, 20, 24, 24)
+        root_layout.setSpacing(20)
+
+        left_panel = self._build_project_list_panel()
+        right_panel = self._build_project_detail_panel()
+
+        root_layout.addWidget(left_panel, 0)
+        root_layout.addWidget(right_panel, 1)
+
+    def _build_project_list_panel(self) -> QWidget:
+        container = QFrame()
+        UnifiedStyles.apply_card_style(container)
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
+
+        title = QLabel("Projects")
+        UnifiedStyles.apply_typography(title, "headline-small")
+        layout.addWidget(title)
+
+        subtitle = QLabel("Create and manage your video projects before editing.")
+        UnifiedStyles.apply_typography(subtitle, "body-small")
+        layout.addWidget(subtitle)
+
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Search projects")
+        self.search_input.textChanged.connect(self._filter_project_list)
+        layout.addWidget(self.search_input)
+
+        self.project_list = QListWidget()
+        self.project_list.setSelectionMode(QListWidget.SingleSelection)
+        self.project_list.itemSelectionChanged.connect(self._on_project_selection_changed)
+        layout.addWidget(self.project_list, 1)
+
+        self.create_project_btn = QPushButton("New Project")
+        self.create_project_btn.clicked.connect(self._create_project_flow)
+        UnifiedStyles.apply_button_style(self.create_project_btn, "primary")
+        layout.addWidget(self.create_project_btn)
+
+        return container
+
+    def _build_project_detail_panel(self) -> QWidget:
+        outer = QFrame()
+        outer_layout = QVBoxLayout(outer)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(16)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setFrameShape(QFrame.NoFrame)
 
-        content_widget = QWidget()
-        scroll.setWidget(content_widget)
-        main_layout.addWidget(scroll, 1)
-
-        content_layout = QVBoxLayout(content_widget)
-        content_layout.setSpacing(self.sp(20))
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(16)
 
-        self.cards_layout = QGridLayout()
-        self.cards_layout.setSpacing(self.sp(20))
-        content_layout.addLayout(self.cards_layout)
+        self.header_card = self._build_info_card()
+        self.directories_card = self._build_directories_card()
+        self.resources_card = self._build_resources_card()
+        self.history_card = self._build_history_card()
+        self.action_bar = self._build_action_bar()
 
-        self.project_card = self._create_project_management_card()
-        self.recent_card = self._create_recent_projects_card()
-        self.directories_card = self._create_directories_card()
-        self.pattern_card = self._create_pattern_matching_card()
-
-        self.card_widgets: List[QWidget] = [
-            self.project_card,
-            self.recent_card,
-            self.directories_card,
-            self.pattern_card,
-        ]
-        self.update_cards_layout(self.width() or self.responsive_breakpoint + 1)
-
-        actions_bar = self._create_actions_bar()
-        content_layout.addWidget(actions_bar)
+        content_layout.addWidget(self.header_card)
+        content_layout.addWidget(self.directories_card)
+        content_layout.addWidget(self.resources_card)
+        content_layout.addWidget(self.history_card)
+        content_layout.addWidget(self.action_bar)
         content_layout.addStretch()
 
-    def _create_header_section(self) -> QFrame:
-        header_frame = QFrame()
-        header_frame.setObjectName("HeaderFrame")
+        scroll.setWidget(content)
+        outer_layout.addWidget(scroll)
+        return outer
 
-        layout = QHBoxLayout(header_frame)
-        layout.setContentsMargins(self.sp(24), self.sp(16), self.sp(24), self.sp(16))
-        layout.setSpacing(self.sp(12))
+    def _build_info_card(self) -> QFrame:
+        card = QFrame()
+        UnifiedStyles.apply_card_style(card, elevated=True)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(26, 26, 26, 26)
+        layout.setSpacing(18)
 
-        title_layout = QVBoxLayout()
-        title_layout.setSpacing(self.sp(4))
+        self.project_name_edit = QLineEdit()
+        self.project_name_edit.setPlaceholderText("Project name")
+        self.project_name_edit.textChanged.connect(self._on_project_name_changed)
 
-        title = QLabel(f"{MaterialIcons.PROJECT} Project Management")
-        title.setObjectName("HeaderTitle")
-        title_layout.addWidget(title)
+        self.project_description_edit = QTextEdit()
+        self.project_description_edit.setPlaceholderText("Project description, goals, or notes")
+        self.project_description_edit.textChanged.connect(self._on_project_description_changed)
+        self.project_description_edit.setMinimumHeight(80)
 
-        subtitle = QLabel("Create, organise, and manage your video projects")
-        subtitle.setObjectName("HeaderSubtitle")
-        title_layout.addWidget(subtitle)
-        title_layout.addStretch()
+        meta_row = QHBoxLayout()
+        meta_row.setSpacing(24)
 
-        layout.addLayout(title_layout)
-        layout.addStretch()
+        self.created_label = QLabel()
+        UnifiedStyles.apply_typography(self.created_label, "body-small")
 
-        self.header_project_info = QLabel("No project loaded")
-        self.header_project_info.setObjectName("HeaderInfo")
-        self.header_project_info.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        layout.addWidget(self.header_project_info)
+        self.updated_label = QLabel()
+        UnifiedStyles.apply_typography(self.updated_label, "body-small")
 
-        return header_frame
+        self.status_badge = QLabel()
+        UnifiedStyles.apply_typography(self.status_badge, "overline")
+        self.status_badge.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-    def _create_project_management_card(self) -> QFrame:
-        card = self._create_card()
-        layout = card.layout()  # type: ignore[assignment]
+        meta_row.addWidget(self.created_label)
+        meta_row.addWidget(self.updated_label)
+        meta_row.addStretch()
+        meta_row.addWidget(self.status_badge)
 
-        title = QLabel(f"{MaterialIcons.PROJECT} Current Project")
-        UnifiedStyles.apply_typography(title, "title-medium")
-        title.setStyleSheet("font-weight: 600; margin-bottom: 8px; background: transparent;")
-        layout.addWidget(title)
-
-        name_label = QLabel("Project name")
-        UnifiedStyles.apply_typography(name_label, "label-small")
-        name_label.setStyleSheet("background: transparent; color: #94a3b8; margin-bottom: 4px;")
-        layout.addWidget(name_label)
-
-        self.project_name_input = QLineEdit()
-        self.project_name_input.setPlaceholderText("Enter project name")
-        self.project_name_input.textChanged.connect(self.update_project_name)
-        self.project_name_input.setStyleSheet("""
-            QLineEdit {
-                padding: 12px;
-                border: 1px solid #334155;
-                border-radius: 8px;
-                background-color: #1e293b;
-                color: #e2e8f0;
-                font-size: 14px;
-            }
-            QLineEdit:focus {
-                border: 2px solid #4f46e5;
-                background-color: #0f172a;
-            }
-        """)
-        layout.addWidget(self.project_name_input)
-
-        info_frame = QFrame()
-        info_frame.setObjectName("InfoFrame")
-        info_layout = QVBoxLayout(info_frame)
-        info_layout.setContentsMargins(self.sp(12), self.sp(12), self.sp(12), self.sp(12))
-        info_layout.setSpacing(self.sp(4))
-
-        self.project_status = QLabel("Ready to create a new project")
-        self.project_status.setObjectName("StatusLabel")
-        info_layout.addWidget(self.project_status)
-
-        self.project_details = QLabel("No project details available")
-        self.project_details.setObjectName("DetailsLabel")
-        self.project_details.setWordWrap(True)
-        info_layout.addWidget(self.project_details)
-
-        layout.addWidget(info_frame)
-
-        buttons_layout = QHBoxLayout()
-        buttons_layout.setSpacing(self.sp(12))
-
-        self.new_project_btn = QPushButton(f"{MaterialIcons.ADD} New")
-        UnifiedStyles.apply_button_style(self.new_project_btn, "secondary")
-        self.new_project_btn.clicked.connect(self.new_project)
-        buttons_layout.addWidget(self.new_project_btn)
-
-        self.save_project_btn = QPushButton(f"{MaterialIcons.SAVE} Save")
-        UnifiedStyles.apply_button_style(self.save_project_btn, "primary")
-        self.save_project_btn.clicked.connect(self.save_project)
-        buttons_layout.addWidget(self.save_project_btn)
-
-        self.load_project_btn = QPushButton(f"{MaterialIcons.LOAD} Load")
-        UnifiedStyles.apply_button_style(self.load_project_btn, "outline")
-        self.load_project_btn.clicked.connect(self.load_project)
-        buttons_layout.addWidget(self.load_project_btn)
-
-        buttons_layout.addStretch()
-        layout.addLayout(buttons_layout)
+        layout.addWidget(self.project_name_edit)
+        layout.addWidget(self.project_description_edit)
+        layout.addLayout(meta_row)
 
         return card
 
-    def _create_recent_projects_card(self) -> QFrame:
-        card = self._create_card()
-        layout = card.layout()  # type: ignore[assignment]
-
-        title = QLabel(f"{MaterialIcons.FILE} Recent Projects")
-        UnifiedStyles.apply_typography(title, "title-medium")
-        title.setStyleSheet("font-weight: 600; margin-bottom: 8px; background: transparent;")
-        layout.addWidget(title)
-
-        description = QLabel("Double-click to load a saved project")
-        UnifiedStyles.apply_typography(description, "body-small")
-        description.setStyleSheet("background: transparent; color: #64748b; margin-bottom: 8px;")
-        layout.addWidget(description)
-
-        self.recent_projects_list = QListWidget()
-        self.recent_projects_list.setObjectName("RecentProjectsList")
-        self.recent_projects_list.itemDoubleClicked.connect(self.load_selected_recent_project)
-        layout.addWidget(self.recent_projects_list)
-
-        return card
-
-    def _create_directories_card(self) -> QFrame:
-        card = self._create_card()
-        layout = card.layout()  # type: ignore[assignment]
-
-        title = QLabel(f"{MaterialIcons.FOLDER} Project Directories")
-        UnifiedStyles.apply_typography(title, "title-medium")
-        title.setStyleSheet("font-weight: 600; margin-bottom: 12px; background: transparent;")
-        layout.addWidget(title)
-
-        grid = QGridLayout()
-        grid.setSpacing(self.sp(12))
-        layout.addLayout(grid)
-
-        self.audio_dir_input = self._create_directory_row(
-            grid,
-            row=0,
-            label="Audio files",
-            placeholder="Select folder containing audio files",
-            browse_slot=self.browse_audio_directory,
-            on_change=self.update_audio_directory,
-        )
-
-        self.image_dir_input = self._create_directory_row(
-            grid,
-            row=1,
-            label="Image files",
-            placeholder="Select folder containing image files",
-            browse_slot=self.browse_image_directory,
-            on_change=self.update_image_directory,
-        )
-
-        self.subtitle_dir_input = self._create_directory_row(
-            grid,
-            row=2,
-            label="Subtitles (optional)",
-            placeholder="Select folder containing subtitle files",
-            browse_slot=self.browse_subtitle_directory,
-            on_change=self.update_subtitle_directory,
-        )
-
-        self.output_dir_input = self._create_directory_row(
-            grid,
-            row=3,
-            label="Output",
-            placeholder="Select folder for rendered videos",
-            browse_slot=self.browse_output_directory,
-            on_change=self.update_output_directory,
-        )
-
-        return card
-
-    def _create_pattern_matching_card(self) -> QFrame:
-        card = self._create_card()
-        layout = card.layout()  # type: ignore[assignment]
-
-        title = QLabel(f"{MaterialIcons.PATTERN} Smart Pattern Matching")
-        UnifiedStyles.apply_typography(title, "title-medium")
-        title.setStyleSheet("font-weight: 600; margin-bottom: 8px; background: transparent;")
-        layout.addWidget(title)
-
-        description = QLabel("Enter a base filename to detect related assets (e.g. 'audio', 'scene01').")
-        UnifiedStyles.apply_typography(description, "body-small")
-        description.setWordWrap(True)
-        description.setStyleSheet("background: transparent; color: #64748b; margin-bottom: 12px;")
-        layout.addWidget(description)
-
-        input_layout = QHBoxLayout()
-        input_layout.setSpacing(self.sp(12))
-
-        self.pattern_input = QLineEdit()
-        self.pattern_input.setPlaceholderText("e.g. audio, scene01, shot_01")
-        self.pattern_input.textChanged.connect(self.update_pattern)
-        self.pattern_input.setStyleSheet("""
-            QLineEdit {
-                padding: 12px;
-                border: 1px solid #334155;
-                border-radius: 8px;
-                background-color: #1e293b;
-                color: #e2e8f0;
-                font-size: 14px;
-            }
-            QLineEdit:focus {
-                border: 2px solid #4f46e5;
-                background-color: #0f172a;
-            }
-        """)
-        input_layout.addWidget(self.pattern_input)
-
-        self.apply_pattern_btn = QPushButton(f"{MaterialIcons.MAGIC_WAND} Apply")
-        UnifiedStyles.apply_button_style(self.apply_pattern_btn, "tertiary")
-        self.apply_pattern_btn.clicked.connect(self.apply_pattern)
-        input_layout.addWidget(self.apply_pattern_btn)
-
-        layout.addLayout(input_layout)
-
-        helper = QLabel("Detected assets will appear below once a pattern has been applied.")
-        UnifiedStyles.apply_typography(helper, "caption")
-        helper.setStyleSheet("background: transparent; color: #64748b;")
-        layout.addWidget(helper)
-
-        self.assets_preview = QTextEdit()
-        self.assets_preview.setReadOnly(True)
-        self.assets_preview.setObjectName("AssetsPreview")
-        layout.addWidget(self.assets_preview)
-
-        return card
-
-    def _create_actions_bar(self) -> QFrame:
-        frame = QFrame()
-        frame.setObjectName("ActionsBar")
-
-        layout = QHBoxLayout(frame)
-        layout.setContentsMargins(self.sp(18), self.sp(12), self.sp(18), self.sp(12))
-        layout.setSpacing(self.sp(16))
-
-        text_block = QVBoxLayout()
-        text_block.setSpacing(self.sp(2))
-
-        title = QLabel(f"{MaterialIcons.MAGIC_WAND} Quick Actions")
-        UnifiedStyles.apply_typography(title, "title-small")
-        title.setStyleSheet("font-weight: 600; color: #e2e8f0;")
-        text_block.addWidget(title)
-
-        subtitle = QLabel("Validate configuration, scan assets, or export settings")
-        UnifiedStyles.apply_typography(subtitle, "body-small")
-        subtitle.setStyleSheet("background: transparent; color: #64748b;")
-        text_block.addWidget(subtitle)
-        text_block.addStretch()
-
-        layout.addLayout(text_block)
-        layout.addStretch()
-
-        buttons_layout = QHBoxLayout()
-        buttons_layout.setSpacing(self.sp(12))
-
-        self.scan_assets_btn = QPushButton(f"{MaterialIcons.SCAN} Scan Assets")
-        UnifiedStyles.apply_button_style(self.scan_assets_btn, "primary")
-        self.scan_assets_btn.clicked.connect(self.scan_all_assets)
-        buttons_layout.addWidget(self.scan_assets_btn)
-
-        self.validate_project_btn = QPushButton(f"{MaterialIcons.VALIDATE} Validate")
-        UnifiedStyles.apply_button_style(self.validate_project_btn, "secondary")
-        self.validate_project_btn.clicked.connect(self.validate_project)
-        buttons_layout.addWidget(self.validate_project_btn)
-
-        self.export_config_btn = QPushButton(f"{MaterialIcons.EXPORT} Export Config")
-        UnifiedStyles.apply_button_style(self.export_config_btn, "outline")
-        self.export_config_btn.clicked.connect(self.export_project_config)
-        buttons_layout.addWidget(self.export_config_btn)
-
-        layout.addLayout(buttons_layout)
-        return frame
-
-    def _create_card(self) -> QFrame:
+    def _build_directories_card(self) -> QFrame:
         card = QFrame()
         UnifiedStyles.apply_card_style(card)
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(self.sp(20), self.sp(20), self.sp(20), self.sp(20))
-        layout.setSpacing(self.sp(16))
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(16)
+
+        header = QLabel("Project resources")
+        UnifiedStyles.apply_typography(header, "headline-small")
+        layout.addWidget(header)
+
+        helper = QLabel("Tell the editor where to find your media. These folders are used across all tabs.")
+        UnifiedStyles.apply_typography(helper, "body-small")
+        layout.addWidget(helper)
+
+        grid = QGridLayout()
+        grid.setSpacing(12)
+        layout.addLayout(grid)
+
+        self.directory_inputs: Dict[str, QLineEdit] = {}
+
+        self._add_directory_field(grid, 0, "Audio folder", "audio", self._browse_audio_directory)
+        self._add_directory_field(grid, 1, "Image folder", "image", self._browse_image_directory)
+        self._add_directory_field(grid, 2, "Subtitle folder", "subtitle", self._browse_subtitle_directory)
+        self._add_directory_field(grid, 3, "Output folder", "output", self._browse_output_directory)
+
         return card
 
-    def _create_directory_row(
-        self,
-        grid: QGridLayout,
-        row: int,
-        label: str,
-        placeholder: str,
-        browse_slot,
-        on_change,
-    ) -> QLineEdit:
+    def _add_directory_field(self, grid: QGridLayout, row: int, label: str, key: str, handler) -> None:
         caption = QLabel(label)
         UnifiedStyles.apply_typography(caption, "label-small")
-        caption.setAlignment(Qt.AlignCenter)  # Căn giữa text
-        caption.setStyleSheet("background: transparent; padding: 8px;")  # Bỏ background
-        grid.addWidget(caption, row, 0, 1, 1)
+        grid.addWidget(caption, row, 0)
 
-        input_layout = QHBoxLayout()
-        input_layout.setSpacing(self.sp(8))
+        field_layout = QHBoxLayout()
+        field_layout.setSpacing(8)
 
         line_edit = QLineEdit()
-        line_edit.setPlaceholderText(placeholder)
-        line_edit.textChanged.connect(on_change)
-        input_layout.addWidget(line_edit, 1)
+        line_edit.setPlaceholderText("Select a folder…")
+        line_edit.textChanged.connect(lambda value, slot_key=key: self._on_directory_changed(slot_key, value))
+        field_layout.addWidget(line_edit, 1)
 
-        browse_btn = QPushButton(f"{MaterialIcons.FOLDER} Browse")
+        browse_btn = QPushButton("Browse")
         UnifiedStyles.apply_button_style(browse_btn, "outline", "small")
-        browse_btn.clicked.connect(browse_slot)
-        input_layout.addWidget(browse_btn)
+        browse_btn.clicked.connect(handler)
+        field_layout.addWidget(browse_btn)
 
-        grid.addLayout(input_layout, row, 1, 1, 1)
-        return line_edit
+        grid.addLayout(field_layout, row, 1)
+        self.directory_inputs[key] = line_edit
+
+    def _build_resources_card(self) -> QFrame:
+        card = QFrame()
+        UnifiedStyles.apply_card_style(card)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(16)
+
+        header_row = QHBoxLayout()
+        title = QLabel("Resource overview")
+        UnifiedStyles.apply_typography(title, "headline-small")
+        header_row.addWidget(title)
+        header_row.addStretch()
+
+        self.refresh_resources_btn = QPushButton("Refresh counts")
+        UnifiedStyles.apply_button_style(self.refresh_resources_btn, "secondary", "small")
+        self.refresh_resources_btn.clicked.connect(self._refresh_resource_summary)
+        header_row.addWidget(self.refresh_resources_btn)
+        layout.addLayout(header_row)
+
+        grid = QGridLayout()
+        grid.setSpacing(20)
+        layout.addLayout(grid)
+
+        self.resource_labels: Dict[str, QLabel] = {}
+        resource_titles = {
+            "audio": "Audio files",
+            "image": "Image files",
+            "subtitle": "Subtitle files",
+        }
+        for index, (key, caption) in enumerate(resource_titles.items()):
+            card_container = QFrame()
+            UnifiedStyles.apply_card_style(card_container)
+            inner = QVBoxLayout(card_container)
+            inner.setContentsMargins(16, 16, 16, 16)
+            inner.setSpacing(6)
+
+            caption_label = QLabel(caption)
+            UnifiedStyles.apply_typography(caption_label, "label-small")
+            value_label = QLabel("0")
+            UnifiedStyles.apply_typography(value_label, "headline-medium")
+
+            inner.addWidget(caption_label)
+            inner.addWidget(value_label)
+            inner.addStretch()
+
+            grid.addWidget(card_container, 0, index)
+            self.resource_labels[key] = value_label
+
+        return card
+
+    def _build_history_card(self) -> QFrame:
+        card = QFrame()
+        UnifiedStyles.apply_card_style(card)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(16)
+
+        title_row = QHBoxLayout()
+        title = QLabel("Activity history")
+        UnifiedStyles.apply_typography(title, "headline-small")
+        title_row.addWidget(title)
+        title_row.addStretch()
+
+        self.clear_history_btn = QPushButton("Clear history")
+        UnifiedStyles.apply_button_style(self.clear_history_btn, "ghost", "small")
+        self.clear_history_btn.clicked.connect(self._clear_history)
+        title_row.addWidget(self.clear_history_btn)
+
+        layout.addLayout(title_row)
+
+        self.history_list = QListWidget()
+        layout.addWidget(self.history_list, 1)
+
+        return card
+
+    def _build_action_bar(self) -> QFrame:
+        frame = QFrame()
+        UnifiedStyles.apply_card_style(frame)
+        layout = QHBoxLayout(frame)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(12)
+
+        self.save_btn = QPushButton("Save project")
+        UnifiedStyles.apply_button_style(self.save_btn, "primary")
+        self.save_btn.clicked.connect(self._save_current_project)
+        layout.addWidget(self.save_btn)
+
+        self.duplicate_btn = QPushButton("Duplicate")
+        UnifiedStyles.apply_button_style(self.duplicate_btn, "secondary")
+        self.duplicate_btn.clicked.connect(self._duplicate_project)
+        layout.addWidget(self.duplicate_btn)
+
+        self.delete_btn = QPushButton("Delete")
+        UnifiedStyles.apply_button_style(self.delete_btn, "outline")
+        self.delete_btn.clicked.connect(self._delete_project)
+        layout.addWidget(self.delete_btn)
+
+        layout.addStretch()
+
+        self.open_media_btn = QPushButton("Open media folders")
+        UnifiedStyles.apply_button_style(self.open_media_btn, "ghost")
+        self.open_media_btn.clicked.connect(self._open_media_folders)
+        layout.addWidget(self.open_media_btn)
+
+        return frame
 
     # ------------------------------------------------------------------
-    # Layout responsiveness
-    # ------------------------------------------------------------------
-    def resizeEvent(self, event) -> None:  # type: ignore[override]
-        super().resizeEvent(event)
-        self.update_cards_layout(event.size().width())
-
-    def update_cards_layout(self, available_width: int) -> None:
-        if not hasattr(self, "cards_layout"):
-            return
-
-        for widget in self.card_widgets:
-            self.cards_layout.removeWidget(widget)
-
-        columns = 1 if available_width < self.responsive_breakpoint else 2
-        for index, widget in enumerate(self.card_widgets):
-            row = index // columns
-            column = index % columns
-            self.cards_layout.addWidget(widget, row, column)
-
-        self.cards_layout.setColumnStretch(0, 1)
-        self.cards_layout.setColumnStretch(1, 1 if columns > 1 else 0)
-
-    # ------------------------------------------------------------------
-    # Project state helpers
+    # Project loading and binding
     # ------------------------------------------------------------------
     def _get_projects_directory(self) -> Path:
-        projects_dir = Path.home() / ".vibe_render_tool" / "projects"
-        projects_dir.mkdir(parents=True, exist_ok=True)
-        return projects_dir
+        base = Path.home() / ".vibe-render" / "projects"
+        base.mkdir(parents=True, exist_ok=True)
+        return base
 
-    def new_project(self) -> None:
-        timestamp = datetime.now().isoformat()
-        self.current_project = {
-            "name": "Untitled Project",
-            "created": timestamp,
-            "modified": timestamp,
-            "audio_directory": "",
-            "image_directory": "",
-            "subtitle_directory": "",
-            "output_directory": "",
-            "pattern": "",
-            "assets": [],
-            "settings": {},
-        }
-        self.project_name_input.setText(self.current_project["name"])  # type: ignore[arg-type]
-        self.pattern_input.clear()
-        self.assets_preview.clear()
-        self.audio_dir_input.clear()
-        self.image_dir_input.clear()
-        self.subtitle_dir_input.clear()
-        self.output_dir_input.clear()
-        self.update_project_info()
-        QMessageBox.information(self, "New Project", "A fresh project has been created.")
+    def _load_projects(self) -> None:
+        self.projects = []
+        for path in sorted(self.projects_directory.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+            try:
+                with path.open("r", encoding="utf-8") as handle:
+                    data = json.load(handle)
+                record = ProjectRecord.from_dict(data, source=path)
+                self.projects.append(record)
+            except Exception:
+                continue
 
-    def save_project(self) -> None:
-        name = self.current_project.get("name", "").strip()  # type: ignore[help-by-default]
-        if not name:
-            QMessageBox.warning(self, "Save Project", "Please enter a project name before saving.")
+        self._populate_project_list()
+
+    def _populate_project_list(self, query: str = "") -> None:
+        self.project_list.blockSignals(True)
+        self.project_list.clear()
+
+        normalized = query.lower().strip()
+        for record in self.projects:
+            if normalized and normalized not in record.name.lower():
+                continue
+            item = QListWidgetItem(record.name)
+            subtitle = datetime.fromisoformat(record.updated_at).strftime("%d %b %Y • %H:%M")
+            item.setToolTip(f"Last edited {subtitle}")
+            item.setData(Qt.UserRole, record.id)
+            self.project_list.addItem(item)
+
+        if self.project_list.count() == 0:
+            empty = QListWidgetItem("No projects found")
+            empty.setFlags(Qt.NoItemFlags)
+            self.project_list.addItem(empty)
+
+        self.project_list.blockSignals(False)
+
+    def _filter_project_list(self, text: str) -> None:
+        self._populate_project_list(text)
+
+    def _on_project_selection_changed(self) -> None:
+        if not self.project_list.selectedItems():
             return
+        selected = self.project_list.selectedItems()[0]
+        project_id = selected.data(Qt.UserRole)
+        record = self._get_project_by_id(project_id)
+        if record:
+            self._bind_project(record)
 
-        self.current_project["modified"] = datetime.now().isoformat()
+    def _get_project_by_id(self, project_id: str) -> Optional[ProjectRecord]:
+        for record in self.projects:
+            if record.id == project_id:
+                return record
+        return None
 
-        filename = f"{name}.json"
-        filepath = self.projects_directory / filename
-        try:
-            with filepath.open("w", encoding="utf-8") as handle:
-                json.dump(self.current_project, handle, indent=2)
-        except Exception as exc:  # pragma: no cover - user notified
-            QMessageBox.critical(self, "Save Project", f"Failed to save project:\n{exc}")
-            return
+    def _bind_project(self, project: ProjectRecord) -> None:
+        self.current_project = project
+        self.unsaved_changes = False
 
-        QMessageBox.information(self, "Save Project", f"Project saved to {filepath}")
-        self.load_recent_projects()
-        self.update_project_info()
+        self.project_name_edit.blockSignals(True)
+        self.project_description_edit.blockSignals(True)
 
-    def load_project(self) -> None:
-        filepath, _ = QFileDialog.getOpenFileName(
-            self,
-            "Load Project",
-            str(self.projects_directory),
-            "Project files (*.json)",
-        )
-        if not filepath:
-            return
+        self.project_name_edit.setText(project.name)
+        self.project_description_edit.setPlainText(project.description)
 
-        try:
-            with open(filepath, "r", encoding="utf-8") as handle:
-                data = json.load(handle)
-        except Exception as exc:  # pragma: no cover - user notified
-            QMessageBox.critical(self, "Load Project", f"Failed to load project:\n{exc}")
-            return
+        for key, field in self.directory_inputs.items():
+            field.blockSignals(True)
+            field.setText(project.directories.get(key, ""))
+            field.blockSignals(False)
 
-        self.current_project = {
-            **{
-                "name": "",
-                "created": "",
-                "modified": "",
-                "audio_directory": "",
-                "image_directory": "",
-                "subtitle_directory": "",
-                "output_directory": "",
-                "pattern": "",
-                "assets": [],
-                "settings": {},
-            },
-            **data,
-        }
+        self._update_metadata_labels()
+        self._update_resource_labels()
+        self._populate_history()
+        self._update_save_button_state()
 
-        self.project_name_input.setText(self.current_project.get("name", ""))
-        self.audio_dir_input.setText(self.current_project.get("audio_directory", ""))
-        self.image_dir_input.setText(self.current_project.get("image_directory", ""))
-        self.subtitle_dir_input.setText(self.current_project.get("subtitle_directory", ""))
-        self.output_dir_input.setText(self.current_project.get("output_directory", ""))
-        self.pattern_input.setText(self.current_project.get("pattern", ""))
-        self.update_assets_preview()
-        self.update_project_info()
-        self.load_recent_projects()
+        self.project_name_edit.blockSignals(False)
+        self.project_description_edit.blockSignals(False)
 
-    def load_selected_recent_project(self, item: QListWidgetItem) -> None:
-        filepath = item.data(Qt.UserRole)
-        if filepath:
-            self._load_project_from_path(Path(filepath))
+    def _update_metadata_labels(self) -> None:
+        created = datetime.fromisoformat(self.current_project.created_at).strftime("%d %b %Y • %H:%M")
+        updated = datetime.fromisoformat(self.current_project.updated_at).strftime("%d %b %Y • %H:%M")
+        self.created_label.setText(f"Created {created}")
+        self.updated_label.setText(f"Last updated {updated}")
+        status = "Unsaved changes" if self.unsaved_changes else "Up to date"
+        self.status_badge.setText(status.upper())
 
-    def _load_project_from_path(self, path: Path) -> None:
-        try:
-            with path.open("r", encoding="utf-8") as handle:
-                data = json.load(handle)
-        except Exception as exc:  # pragma: no cover - user notified
-            QMessageBox.critical(self, "Load Project", f"Failed to load project:\n{exc}")
-            return
-
-        self.current_project.update(data)
-        self.project_name_input.setText(self.current_project.get("name", ""))
-        self.audio_dir_input.setText(self.current_project.get("audio_directory", ""))
-        self.image_dir_input.setText(self.current_project.get("image_directory", ""))
-        self.subtitle_dir_input.setText(self.current_project.get("subtitle_directory", ""))
-        self.output_dir_input.setText(self.current_project.get("output_directory", ""))
-        self.pattern_input.setText(self.current_project.get("pattern", ""))
-        self.update_assets_preview()
-        self.update_project_info()
-
-    def load_recent_projects(self) -> None:
-        self.recent_projects_list.clear()
-        if not self.projects_directory.exists():
-            return
-
-        project_files = sorted(
-            self.projects_directory.glob("*.json"),
-            key=lambda file: file.stat().st_mtime,
-            reverse=True,
-        )
-
-        if not project_files:
-            placeholder = QListWidgetItem("No saved projects yet")
+    def _populate_history(self) -> None:
+        self.history_list.clear()
+        if not self.current_project.history:
+            placeholder = QListWidgetItem("History is empty")
             placeholder.setFlags(Qt.NoItemFlags)
-            self.recent_projects_list.addItem(placeholder)
+            self.history_list.addItem(placeholder)
             return
 
-        for path in project_files[:12]:
-            item = QListWidgetItem(path.stem)
-            item.setToolTip(str(path))
-            item.setData(Qt.UserRole, str(path))
-            self.recent_projects_list.addItem(item)
+        for entry in self.current_project.history:
+            stamp = datetime.fromisoformat(entry["timestamp"]).strftime("%d %b %Y • %H:%M")
+            item = QListWidgetItem(f"{stamp} – {entry['event']}")
+            self.history_list.addItem(item)
 
-    def update_project_name(self, name: str) -> None:
-        self.current_project["name"] = name
-        self.update_project_info()
+    def _update_resource_labels(self) -> None:
+        for key, label in self.resource_labels.items():
+            label.setText(str(self.current_project.resources.get(key, 0)))
 
-    def update_audio_directory(self, value: str) -> None:
-        self.current_project["audio_directory"] = value
-
-    def update_image_directory(self, value: str) -> None:
-        self.current_project["image_directory"] = value
-
-    def update_subtitle_directory(self, value: str) -> None:
-        self.current_project["subtitle_directory"] = value
-
-    def update_output_directory(self, value: str) -> None:
-        self.current_project["output_directory"] = value
-
-    def update_pattern(self, value: str) -> None:
-        self.current_project["pattern"] = value
-
-    def browse_audio_directory(self) -> None:
-        directory = QFileDialog.getExistingDirectory(self, "Select Audio Directory")
-        if directory:
-            self.audio_dir_input.setText(directory)
-
-    def browse_image_directory(self) -> None:
-        directory = QFileDialog.getExistingDirectory(self, "Select Image Directory")
-        if directory:
-            self.image_dir_input.setText(directory)
-
-    def browse_subtitle_directory(self) -> None:
-        directory = QFileDialog.getExistingDirectory(self, "Select Subtitle Directory")
-        if directory:
-            self.subtitle_dir_input.setText(directory)
-
-    def browse_output_directory(self) -> None:
-        directory = QFileDialog.getExistingDirectory(self, "Select Output Directory")
-        if directory:
-            self.output_dir_input.setText(directory)
+    def _update_save_button_state(self) -> None:
+        self.save_btn.setEnabled(self.unsaved_changes)
+        self.delete_btn.setEnabled(self.current_project.file_path is not None)
+        self.duplicate_btn.setEnabled(self.current_project.file_path is not None)
 
     # ------------------------------------------------------------------
-    # Pattern matching & validation
+    # Events & mutations
     # ------------------------------------------------------------------
-    def apply_pattern(self) -> None:
-        pattern = self.pattern_input.text().strip()
-        if not pattern:
-            QMessageBox.warning(self, "Pattern Matching", "Please enter a pattern first.")
-            return
+    def _on_project_name_changed(self, value: str) -> None:
+        self.current_project.name = value or "Untitled Project"
+        self.unsaved_changes = True
+        self._update_metadata_labels()
 
-        assets = self.detect_pattern_assets(pattern)
-        self.current_project["pattern"] = pattern
-        self.current_project["assets"] = [str(path) for path in assets]
-        self.update_assets_preview()
+    def _on_project_description_changed(self) -> None:
+        self.current_project.description = self.project_description_edit.toPlainText()
+        self.unsaved_changes = True
+        self._update_metadata_labels()
 
-        if assets:
-            QMessageBox.information(
-                self,
-                "Pattern Matching",
-                f"Found {len(assets)} assets matching '{pattern}'.",
-            )
-        else:
-            QMessageBox.information(
-                self,
-                "Pattern Matching",
-                "No files matched the provided pattern. Try another keyword.",
-            )
-        self.update_project_info()
+    def _on_directory_changed(self, key: str, value: str) -> None:
+        self.current_project.directories[key] = value
+        self.unsaved_changes = True
+        self.current_project.push_history(f"Updated {key} directory")
+        self._populate_history()
+        self._update_metadata_labels()
 
-    def detect_pattern_assets(self, pattern: str) -> List[Path]:
-        pattern_lower = pattern.lower()
-        matches: List[Path] = []
-        directories = [
-            self.current_project.get("audio_directory", ""),
-            self.current_project.get("image_directory", ""),
-            self.current_project.get("subtitle_directory", ""),
-        ]
-        for directory in directories:
+    def _refresh_resource_summary(self) -> None:
+        counts = {"audio": 0, "image": 0, "subtitle": 0}
+        audio_suffixes = {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg"}
+        image_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+        subtitle_suffixes = {".srt", ".vtt"}
+
+        for key, directory in self.current_project.directories.items():
             if not directory:
                 continue
-            dir_path = Path(directory)
-            if not dir_path.exists():
+            path = Path(directory)
+            if not path.exists():
                 continue
-            for entry in dir_path.iterdir():
-                if entry.is_file() and pattern_lower in entry.stem.lower():
-                    matches.append(entry)
-        return matches
+            try:
+                for item in path.iterdir():
+                    if item.is_file():
+                        suffix = item.suffix.lower()
+                        if suffix in audio_suffixes:
+                            counts["audio"] += 1
+                        if suffix in image_suffixes:
+                            counts["image"] += 1
+                        if suffix in subtitle_suffixes:
+                            counts["subtitle"] += 1
+            except Exception:
+                continue
 
-    def update_assets_preview(self) -> None:
-        assets = self.current_project.get("assets", [])
-        if assets:
-            preview_lines = []
-            for asset in assets[:25]:
-                preview_lines.append(Path(asset).name if isinstance(asset, str) else str(asset))
-            if len(assets) > 25:
-                preview_lines.append(f"… +{len(assets) - 25} more")
-            self.assets_preview.setPlainText("\n".join(preview_lines))
-        else:
-            self.assets_preview.clear()
+        self.current_project.resources = counts
+        self.current_project.push_history("Refreshed resource counts")
+        self.unsaved_changes = True
+        self._update_resource_labels()
+        self._populate_history()
+        self._update_metadata_labels()
 
-    def scan_all_assets(self) -> None:
-        audio_dir = self.current_project.get("audio_directory", "")
-        image_dir = self.current_project.get("image_directory", "")
-        if not audio_dir and not image_dir:
-            QMessageBox.warning(
-                self,
-                "Scan Assets",
-                "Please select at least one directory (audio or image) before scanning.",
-            )
+    def _clear_history(self) -> None:
+        self.current_project.history.clear()
+        self.current_project.push_history("History cleared")
+        self.unsaved_changes = True
+        self._populate_history()
+        self._update_metadata_labels()
+
+    # ------------------------------------------------------------------
+    # Buttons
+    # ------------------------------------------------------------------
+    def _create_project_flow(self) -> None:
+        if self.unsaved_changes and not self._confirm_discard_changes():
+            return
+        record = ProjectRecord.new()
+        self.projects.insert(0, record)
+        self._populate_project_list(self.search_input.text())
+        self.project_list.clearSelection()
+        self._bind_project(record)
+        self.current_project.push_history("Project initialised")
+        self._populate_history()
+        self._update_save_button_state()
+
+    def _save_current_project(self) -> None:
+        if not self.current_project.name.strip():
+            QMessageBox.warning(self, "Save project", "Please enter a project name before saving.")
             return
 
-        candidate_patterns = ["audio", "image", "video", "scene", "shot", "take", "file"]
-        best_pattern = ""
-        best_matches: List[Path] = []
+        self.current_project.updated_at = datetime.now().isoformat()
+        payload = self.current_project.to_dict()
 
-        for pattern in candidate_patterns:
-            matches = self.detect_pattern_assets(pattern)
-            if len(matches) > len(best_matches):
-                best_pattern = pattern
-                best_matches = matches
-
-        if best_pattern:
-            self.pattern_input.setText(best_pattern)
-            self.current_project["pattern"] = best_pattern
-            self.current_project["assets"] = [str(path) for path in best_matches]
-            self.update_assets_preview()
-            self.update_project_info()
-            QMessageBox.information(
-                self,
-                "Scan Assets",
-                f"Auto-detected pattern '{best_pattern}' with {len(best_matches)} assets.",
-            )
-        else:
-            QMessageBox.information(
-                self,
-                "Scan Assets",
-                "No common patterns found. Try entering a pattern manually.",
-            )
-
-    def validate_project(self) -> None:
-        issues: List[str] = []
-        name = self.current_project.get("name", "").strip()
-        if not name:
-            issues.append("• Project name is empty")
-
-        audio_dir = self.current_project.get("audio_directory", "").strip()
-        if not audio_dir:
-            issues.append("• Audio directory not set")
-        elif not Path(audio_dir).exists():
-            issues.append("• Audio directory does not exist")
-
-        image_dir = self.current_project.get("image_directory", "").strip()
-        if not image_dir:
-            issues.append("• Image directory not set")
-        elif not Path(image_dir).exists():
-            issues.append("• Image directory does not exist")
-
-        output_dir = self.current_project.get("output_directory", "").strip()
-        if not output_dir:
-            issues.append("• Output directory not set")
-        elif not Path(output_dir).exists():
-            issues.append("• Output directory does not exist")
-
-        assets = self.current_project.get("assets", [])
-        if not assets:
-            issues.append("• No assets detected. Apply or scan for a pattern.")
-
-        if issues:
-            QMessageBox.warning(self, "Validation", "Project issues detected:\n\n" + "\n".join(issues))
-        else:
-            QMessageBox.information(self, "Validation", "Project configuration looks good!")
-
-    def export_project_config(self) -> None:
-        name = self.current_project.get("name", "").strip() or "project"
-        filepath, _ = QFileDialog.getSaveFileName(
-            self,
-            "Export Project Config",
-            f"{name}_config.json",
-            "JSON files (*.json)",
-        )
-        if not filepath:
-            return
+        target_path = self.current_project.file_path
+        if target_path is None:
+            target_path = self.projects_directory / f"{self.current_project.id}.json"
+            self.current_project.file_path = target_path
 
         try:
-            with open(filepath, "w", encoding="utf-8") as handle:
-                json.dump(self.current_project, handle, indent=2)
-        except Exception as exc:  # pragma: no cover - user notified
-            QMessageBox.critical(self, "Export", f"Failed to export configuration:\n{exc}")
+            with target_path.open("w", encoding="utf-8") as handle:
+                json.dump(payload, handle, indent=2)
+        except Exception as exc:
+            QMessageBox.critical(self, "Save project", f"Failed to save project:\n{exc}")
             return
 
-        QMessageBox.information(self, "Export", f"Configuration exported to:\n{filepath}")
+        self.current_project.push_history("Project saved")
+        self.unsaved_changes = False
+        self._populate_history()
+        self._update_metadata_labels()
+        self._update_save_button_state()
+        self._load_projects()
+
+    def _duplicate_project(self) -> None:
+        clone = ProjectRecord.from_dict(self.current_project.to_dict())
+        clone.id = str(uuid.uuid4())
+        clone.name = f"{clone.name} Copy"
+        clone.created_at = datetime.now().isoformat()
+        clone.updated_at = clone.created_at
+        clone.history = []
+        clone.push_history("Duplicated from existing project")
+        clone.file_path = None
+        self.projects.insert(0, clone)
+        self._populate_project_list(self.search_input.text())
+        self.project_list.clearSelection()
+        self._bind_project(clone)
+        self.unsaved_changes = True
+        self._update_save_button_state()
+
+    def _delete_project(self) -> None:
+        if not self.current_project.file_path or not self.current_project.file_path.exists():
+            QMessageBox.warning(self, "Delete project", "Save the project before deleting it.")
+            return
+        confirm = QMessageBox.question(
+            self,
+            "Delete project",
+            "This will permanently remove the saved project record. Continue?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if confirm != QMessageBox.Yes:
+            return
+        try:
+            self.current_project.file_path.unlink()
+        except Exception as exc:
+            QMessageBox.critical(self, "Delete project", f"Failed to delete project:\n{exc}")
+            return
+        self.projects = [p for p in self.projects if p.id != self.current_project.id]
+        self._populate_project_list(self.search_input.text())
+        self._create_project_flow()
+
+    def _open_media_folders(self) -> None:
+        directories = [path for path in self.current_project.directories.values() if path]
+        if not directories:
+            QMessageBox.information(self, "Open folders", "No media folders configured.")
+            return
+        for directory in directories:
+            QFileDialog.getOpenFileName(self, "Folder preview", directory)
 
     # ------------------------------------------------------------------
-    # Presentation helpers
+    # Helpers
     # ------------------------------------------------------------------
-    def update_project_info(self) -> None:
-        name = self.current_project.get("name", "").strip() or "Unnamed project"
-        created = self.current_project.get("created", "")
-        modified = self.current_project.get("modified", "")
-        assets = self.current_project.get("assets", [])
+    def _browse_audio_directory(self) -> None:
+        directory = QFileDialog.getExistingDirectory(self, "Select audio directory")
+        if directory:
+            self.directory_inputs["audio"].setText(directory)
 
-        def _format(timestamp: str) -> str:
-            if not timestamp:
-                return "n/a"
-            if "T" in timestamp:
-                try:
-                    return datetime.fromisoformat(timestamp).strftime("%d %b %Y %H:%M")
-                except ValueError:
-                    return timestamp
-            return timestamp
+    def _browse_image_directory(self) -> None:
+        directory = QFileDialog.getExistingDirectory(self, "Select image directory")
+        if directory:
+            self.directory_inputs["image"].setText(directory)
 
-        created_text = _format(created)
-        modified_text = _format(modified)
+    def _browse_subtitle_directory(self) -> None:
+        directory = QFileDialog.getExistingDirectory(self, "Select subtitle directory")
+        if directory:
+            self.directory_inputs["subtitle"].setText(directory)
 
-        self.project_status.setText(f"Active project: {name}")
-        details_lines = [
-            f"Created: {created_text}",
-            f"Last saved: {modified_text}",
-            f"Assets detected: {len(assets)}",
-        ]
-        self.project_details.setText("\n".join(details_lines))
-        self.header_project_info.setText(f"{name} • {len(assets)} assets")
+    def _browse_output_directory(self) -> None:
+        directory = QFileDialog.getExistingDirectory(self, "Select output directory")
+        if directory:
+            self.directory_inputs["output"].setText(directory)
 
+    def _confirm_discard_changes(self) -> bool:
+        if not self.unsaved_changes:
+            return True
+        response = QMessageBox.question(
+            self,
+            "Discard changes",
+            "You have unsaved changes. Discard them?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        return response == QMessageBox.Yes
+
+    def closeEvent(self, event) -> None:  # type: ignore[override]
+        if not self._confirm_discard_changes():
+            event.ignore()
+            return
+        super().closeEvent(event)
+
+    def refresh_stylesheet(self) -> None:
+        UnifiedStyles.refresh_stylesheet(self)

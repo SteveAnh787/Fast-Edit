@@ -2,17 +2,13 @@
 Main Window - Cửa sổ chính của ứng dụng Vibe Render Tool
 """
 
-from PySide6.QtWidgets import (
-    QMainWindow, QTabWidget, QWidget, QVBoxLayout, 
-    QHBoxLayout, QLabel, QStatusBar
-)
-from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QStatusBar
+from PySide6.QtCore import QSize
 
 from src.ui.automation_tab import AutomationTab
 from src.ui.composer_tab import ComposerTab
-from src.ui.effects_tab import EffectsTab
 from src.ui.project_tab import ProjectTab
+from src.ui.unified_styles import UnifiedStyles
 
 class MainWindow(QMainWindow):
     """Main application window with tabs"""
@@ -45,20 +41,16 @@ class MainWindow(QMainWindow):
         self.project_tab = ProjectTab()
         self.automation_tab = AutomationTab()
         self.composer_tab = ComposerTab()
-        self.effects_tab = EffectsTab()
         
-        self.tab_widget.addTab(self.project_tab, "Project Management")
+        self.tab_widget.addTab(self.project_tab, "Projects")
         self.tab_widget.addTab(self.automation_tab, "Automation")
         self.tab_widget.addTab(self.composer_tab, "Compose & Render")
-        self.tab_widget.addTab(self.effects_tab, "Visual Effects")
         
         layout.addWidget(self.tab_widget)
         
         # Status bar
         self.setup_status_bar()
-        
-        # Apply custom styling
-        self.apply_styles()
+        self._apply_global_styles()
         
     def setup_tab_widget(self):
         """Setup tab widget styling"""
@@ -71,66 +63,21 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         
-        # Status message
-        self.status_bar.showMessage("Ready - Vibe Render Tool v2.0.0")
-        
-    def apply_styles(self):
-        """Apply custom CSS styles"""
-        style = """
-        QMainWindow {
-            background-color: #0f172a;
-            color: #e2e8f0;
-            font-size: 14px;
-        }
-        
-        QTabWidget::pane {
-            border: 1px solid #334155;
-            background-color: #1e293b;
-            border-radius: 8px;
-        }
-        
-        QTabWidget::tab-bar {
-            left: 0px;
-        }
-        
-        QTabBar::tab {
-            background-color: #334155;
-            color: #94a3b8;
-            padding: 12px 20px;
-            margin-right: 2px;
-            border-top-left-radius: 8px;
-            border-top-right-radius: 8px;
-            font-weight: 500;
-            font-size: 13px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        QTabBar::tab:selected {
-            background-color: #4f46e5;
-            color: white;
-            border-bottom: 2px solid #6366f1;
-        }
-        
-        QTabBar::tab:hover:!selected {
-            background-color: #475569;
-            color: #e2e8f0;
-        }
-        
-        QStatusBar {
-            background-color: #1e293b;
-            color: #94a3b8;
-            border-top: 1px solid #334155;
-            font-size: 12px;
-        }
-        
-        QStatusBar::item {
-            border: none;
-        }
-        """
-        
-        self.setStyleSheet(style)
-        
+        self.status_bar.showMessage("Ready – Vibe Render Tool v2.0.0")
+
+    def _apply_global_styles(self) -> None:
+        app = QApplication.instance()
+        if app:
+            UnifiedStyles.apply_qpalette(app)
+        self.setStyleSheet(UnifiedStyles.get_main_stylesheet())
+
+        if hasattr(self.project_tab, "refresh_stylesheet"):
+            self.project_tab.refresh_stylesheet()
+        if hasattr(self.automation_tab, "refresh_theme"):
+            self.automation_tab.refresh_theme()
+        if hasattr(self.composer_tab, "refresh_theme"):
+            self.composer_tab.refresh_theme()
+
     def update_status(self, message: str):
         """Update status bar message"""
         self.status_bar.showMessage(message)
